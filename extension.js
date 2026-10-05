@@ -231,24 +231,32 @@ export default class NextEventExtension extends Extension {
         const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
         const todayEnd   = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59);
 
-        const events = this._eventSource.getEvents(todayStart, todayEnd);
-        const upcoming = (events || [])
+        const events = this._eventSource.getEvents(todayStart, todayEnd) || [];
+        const upcoming = events
             .filter(ev => ev.date >= now || ev.end >= now)
             .sort((a, b) => a.date - b.date);
         this._upcomingEvents = upcoming;
         this._populateMenu();
 
-        if (!events || events.length === 0) {
+        const timedEvents = events.filter(ev => !this._isAllDayEvent(ev));
+        const upcomingTimedEvents = upcoming.filter(ev => !this._isAllDayEvent(ev));
+
+        if (events.length === 0) {
             this._label.set_text('No events today');
             return;
         }
 
-        if (upcoming.length === 0) {
+        if (timedEvents.length === 0) {
+            this._label.set_text('No timed events today');
+            return;
+        }
+
+        if (upcomingTimedEvents.length === 0) {
             this._label.set_text('Done for today');
             return;
         }
 
-        const next = upcoming[0];
+        const next = upcomingTimedEvents[0];
         const timeStr = this._formatTime(next.date);
         const maxTitleLength = this._getMaxTitleLength();
 
@@ -260,6 +268,15 @@ export default class NextEventExtension extends Extension {
         const prefix = isNow && this._shouldShowOngoingIndicator() ? 'Now' : timeStr;
 
         this._label.set_text(`${prefix} · ${title}`);
+    }
+
+    _isAllDayEvent(event) {
+        // DBusEventSource does not expose an all-day flag. All-day events
+        // start at midnight and end at midnight on a later calendar day.
+        const isMidnight = date => date.getHours() === 0 &&
+            date.getMinutes() === 0 && date.getSeconds() === 0 &&
+            date.getMilliseconds() === 0;
+        return event.end > event.date && isMidnight(event.date) && isMidnight(event.end);
     }
 
     _populateMenu() {
@@ -277,12 +294,20 @@ export default class NextEventExtension extends Extension {
             return;
         }
 
-        for (const ev of this._upcomingEvents) {
+        const allDayEvents = this._upcomingEvents.filter(ev => this._isAllDayEvent(ev));
+        const timedEvents = this._upcomingEvents.filter(ev => !this._isAllDayEvent(ev));
+
+        for (const ev of [...allDayEvents, ...timedEvents]) {
+            if (allDayEvents.length > 0 && ev === timedEvents[0])
+                this._indicator.menu.addMenuItem(new PopupMenu.PopupSeparatorMenuItem());
+
             const now = new Date();
             const isNow = ev.date <= now && ev.end >= now;
-            const timeText = isNow && this._shouldShowOngoingIndicator()
-                ? 'Now'
-                : this._formatTime(ev.date);
+            const timeText = this._isAllDayEvent(ev)
+                ? 'All day'
+                : isNow && this._shouldShowOngoingIndicator()
+                    ? 'Now'
+                    : this._formatTime(ev.date);
             const maxTitleLength = this._getMaxTitleLength();
             let title = ev.summary || 'Untitled Event';
             if (title.length > maxTitleLength)
