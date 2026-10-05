@@ -4,6 +4,8 @@ Shows today’s next calendar event in the GNOME top bar. Click the widget to se
 
 The top bar shows only timed events. All-day events appear at the top of the dropdown with an “All day” label, separated from timed events. Because GNOME’s event source provides only start and end times, events running from midnight to a later midnight are treated as all-day events.
 
+A dot pulses beside the displayed event during the 5 minutes before it starts. Opening the dropdown acknowledges the alert. The dot stops when the event starts, when the label changes to `Now` if that setting is enabled.
+
 ## Quick install (Ubuntu, end user)
 
 1. Download `next-event@bhavik.dev.shell-extension.zip` from this repo’s **Releases** page.
@@ -30,6 +32,7 @@ Available settings:
 - Max title length
 - Refresh interval (seconds)
 - Show/hide `Now` indicator
+- Alert before event (minutes, default 5; 0 disables alerts)
 
 ## Uninstall
 

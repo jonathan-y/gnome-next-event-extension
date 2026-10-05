@@ -77,5 +77,18 @@ export default class NextEventPreferences extends ExtensionPreferences {
         });
         settings.bind('show-ongoing-indicator', nowIndicatorRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         group.add(nowIndicatorRow);
+
+        const alertRow = new Adw.SpinRow({
+            title: _('Alert before event (minutes)'),
+            subtitle: _('Pulse a dot before the displayed event starts; 0 disables alerts'),
+            adjustment: new Gtk.Adjustment({
+                lower: 0,
+                upper: 60,
+                step_increment: 1,
+                page_increment: 5,
+            }),
+        });
+        settings.bind('alert-minutes-before', alertRow, 'value', Gio.SettingsBindFlags.DEFAULT);
+        group.add(alertRow);
     }
 }

@@ -26,6 +26,7 @@ export default class NextEventExtension extends Extension {
         this._settings = this.getSettings();
         this._settingsSignals = [];
         this._upcomingEvents = [];
+        this._acknowledgedAlert = null;
         this._createIndicator();
 
         this._createEventSource();
@@ -37,6 +38,7 @@ export default class NextEventExtension extends Extension {
     }
 
     disable() {
+        this._updateAlert(null);
         if (this._initialRefreshId) {
             GLib.source_remove(this._initialRefreshId);
             this._initialRefreshId = null;
@@ -74,9 +76,12 @@ export default class NextEventExtension extends Extension {
         this._settingsSignals = [];
         this._settings = null;
         this._upcomingEvents = [];
+        this._alertDot = null;
+        this._acknowledgedAlert = null;
     }
 
     _createIndicator() {
+        this._stopAlertPulse();
         const currentText = this._label?.get_text() || 'Loading...';
         if (this._indicator) {
             this._indicator.destroy();
@@ -94,12 +99,32 @@ export default class NextEventExtension extends Extension {
         });
         this._updateLabelStyle();
 
-        this._indicator.add_child(this._label);
+        this._alertDot = new St.Widget({
+            width: 8,
+            height: 8,
+            y_align: Clutter.ActorAlign.CENTER,
+            accessible_name: 'Event starting soon',
+            style: 'background-color: #ffffff; border-radius: 4px; margin-right: 4px;',
+            visible: false,
+        });
+        const box = new St.BoxLayout();
+        box.add_child(this._label);
+        box.add_child(this._alertDot);
+        this._indicator.add_child(box);
+        this._indicator.menu.connect('open-state-changed', (_menu, isOpen) => {
+            if (isOpen && this._alertEventKey) {
+                this._acknowledgedAlert = this._alertEventKey;
+                this._stopAlertPulse();
+            }
+        });
         Main.panel.addToStatusArea('next-event', this._indicator, 0, this._getPanelPosition());
         this._populateMenu();
     }
 
     _connectSettingsSignals() {
+        this._settingsSignals.push(
+            this._settings.connect('changed::alert-minutes-before', () => this._refresh())
+        );
         this._settingsSignals.push(
             this._settings.connect('changed::panel-position', () => {
                 this._createIndicator();
@@ -240,6 +265,7 @@ export default class NextEventExtension extends Extension {
 
         const timedEvents = events.filter(ev => !this._isAllDayEvent(ev));
         const upcomingTimedEvents = upcoming.filter(ev => !this._isAllDayEvent(ev));
+        this._updateAlert(upcomingTimedEvents[0], now);
 
         if (events.length === 0) {
             this._label.set_text('No events today');
@@ -268,6 +294,80 @@ export default class NextEventExtension extends Extension {
         const prefix = isNow && this._shouldShowOngoingIndicator() ? 'Now' : timeStr;
 
         this._label.set_text(`${prefix} · ${title}`);
+    }
+
+    _updateAlert(event, now = new Date()) {
+        if (this._alertBoundaryId) {
+            GLib.source_remove(this._alertBoundaryId);
+            this._alertBoundaryId = null;
+        }
+
+        const minutes = this._settings?.get_int('alert-minutes-before') ?? 5;
+        if (!event || minutes <= 0 || event.date <= now) {
+            this._stopAlertPulse();
+            return;
+        }
+
+        const start = event.date.getTime();
+        const alertStart = start - minutes * 60000;
+        const eventKey = `${event.id || event.summary}:${start}`;
+        const approaching = now.getTime() >= alertStart;
+
+        if (approaching && this._indicator.menu.isOpen)
+            this._acknowledgedAlert = eventKey;
+
+        if (approaching && this._acknowledgedAlert !== eventKey) {
+            this._startAlertPulse(eventKey);
+        } else {
+            this._stopAlertPulse();
+        }
+
+        // Update at the alert window and event start, even with a long refresh interval.
+        const boundary = approaching ? start : alertStart;
+        this._alertBoundaryId = GLib.timeout_add(
+            GLib.PRIORITY_DEFAULT, Math.max(1, Math.ceil(boundary - now.getTime())), () => {
+                this._alertBoundaryId = null;
+                this._refresh();
+                return GLib.SOURCE_REMOVE;
+            }
+        );
+    }
+
+    _startAlertPulse(eventKey) {
+        this._alertEventKey = eventKey;
+        const dot = this._alertDot;
+        if (!dot || dot._isPulsing)
+            return;
+
+        dot._isPulsing = true;
+        dot.opacity = 255;
+        dot.show();
+        const pulse = () => {
+            if (!dot._isPulsing || this._alertDot !== dot)
+                return GLib.SOURCE_REMOVE;
+            dot.ease({
+                opacity: dot.opacity > 128 ? 64 : 255,
+                duration: 900,
+                mode: Clutter.AnimationMode.EASE_IN_OUT_QUAD,
+            });
+            return GLib.SOURCE_CONTINUE;
+        };
+        pulse();
+        this._alertPulseId = GLib.timeout_add(GLib.PRIORITY_DEFAULT, 1000, pulse);
+    }
+
+    _stopAlertPulse() {
+        this._alertEventKey = null;
+        if (this._alertPulseId) {
+            GLib.source_remove(this._alertPulseId);
+            this._alertPulseId = null;
+        }
+        if (!this._alertDot)
+            return;
+        this._alertDot._isPulsing = false;
+        this._alertDot.remove_all_transitions();
+        this._alertDot.opacity = 255;
+        this._alertDot.hide();
     }
 
     _isAllDayEvent(event) {
