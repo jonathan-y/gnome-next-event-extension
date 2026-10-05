@@ -265,7 +265,16 @@ export default class NextEventExtension extends Extension {
 
         const timedEvents = events.filter(ev => !this._isAllDayEvent(ev));
         const upcomingTimedEvents = upcoming.filter(ev => !this._isAllDayEvent(ev));
-        this._updateAlert(upcomingTimedEvents[0], now);
+        const nextFuture = upcomingTimedEvents.find(ev => ev.date > now);
+        const ongoingEvents = upcomingTimedEvents.filter(ev => ev.date <= now && ev.end > now);
+        const current = ongoingEvents[ongoingEvents.length - 1];
+        const approaching = this._updateAlert(nextFuture, now);
+        const next = approaching ? nextFuture : current || nextFuture;
+        const showOngoing = Boolean(next && next.date <= now && this._shouldShowOngoingIndicator());
+        if (showOngoing) {
+            this._alertDot.accessible_name = 'Event in progress';
+            this._alertDot.show();
+        }
 
         if (events.length === 0) {
             this._label.set_text('No events today');
@@ -277,12 +286,11 @@ export default class NextEventExtension extends Extension {
             return;
         }
 
-        if (upcomingTimedEvents.length === 0) {
+        if (!next) {
             this._label.set_text('Done for today');
             return;
         }
 
-        const next = upcomingTimedEvents[0];
         const timeStr = this._formatTime(next.date);
         const maxTitleLength = this._getMaxTitleLength();
 
@@ -290,10 +298,7 @@ export default class NextEventExtension extends Extension {
         if (title.length > maxTitleLength)
             title = title.substring(0, maxTitleLength - 1) + '...';
 
-        const isNow = next.date <= now && next.end >= now;
-        const prefix = isNow && this._shouldShowOngoingIndicator() ? 'Now' : timeStr;
-
-        this._label.set_text(`${prefix} · ${title}`);
+        this._label.set_text(showOngoing ? title : `${timeStr} · ${title}`);
     }
 
     _updateAlert(event, now = new Date()) {
@@ -303,15 +308,15 @@ export default class NextEventExtension extends Extension {
         }
 
         const minutes = this._settings?.get_int('alert-minutes-before') ?? 5;
-        if (!event || minutes <= 0 || event.date <= now) {
+        if (!event || event.date <= now) {
             this._stopAlertPulse();
-            return;
+            return false;
         }
 
         const start = event.date.getTime();
         const alertStart = start - minutes * 60000;
         const eventKey = `${event.id || event.summary}:${start}`;
-        const approaching = now.getTime() >= alertStart;
+        const approaching = minutes > 0 && now.getTime() >= alertStart;
 
         if (approaching && this._indicator.menu.isOpen)
             this._acknowledgedAlert = eventKey;
@@ -323,7 +328,7 @@ export default class NextEventExtension extends Extension {
         }
 
         // Update at the alert window and event start, even with a long refresh interval.
-        const boundary = approaching ? start : alertStart;
+        const boundary = approaching || minutes <= 0 ? start : alertStart;
         this._alertBoundaryId = GLib.timeout_add(
             GLib.PRIORITY_DEFAULT, Math.max(1, Math.ceil(boundary - now.getTime())), () => {
                 this._alertBoundaryId = null;
@@ -331,6 +336,7 @@ export default class NextEventExtension extends Extension {
                 return GLib.SOURCE_REMOVE;
             }
         );
+        return approaching;
     }
 
     _startAlertPulse(eventKey) {
@@ -340,6 +346,7 @@ export default class NextEventExtension extends Extension {
             return;
 
         dot._isPulsing = true;
+        dot.accessible_name = 'Event starting soon';
         dot.opacity = 255;
         dot.show();
         const pulse = () => {

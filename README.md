@@ -4,7 +4,7 @@ Shows today’s next calendar event in the GNOME top bar. Click the widget to se
 
 The top bar shows only timed events. All-day events appear at the top of the dropdown with an “All day” label, separated from timed events. Because GNOME’s event source provides only start and end times, events running from midnight to a later midnight are treated as all-day events.
 
-A dot pulses beside the displayed event during the 5 minutes before it starts. Opening the dropdown acknowledges the alert. The dot stops when the event starts, when the label changes to `Now` if that setting is enabled.
+An ongoing event shows its title with a solid white dot. During the 5 minutes before the next timed event, that upcoming event takes priority in the top bar with its time, title, and a pulsing white dot, even if another event is still running. Opening the dropdown stops the pulse while keeping the upcoming event displayed. At its start, the dot becomes solid and the newly started event becomes current. When no event is running, the next event's time and title appear normally until its alert window.
 
 ## Quick install (Ubuntu, end user)
 
@@ -31,7 +31,7 @@ Available settings:
 - Font size
 - Max title length
 - Refresh interval (seconds)
-- Show/hide `Now` indicator
+- Highlight ongoing events (solid white dot in the top bar, `Now` in the dropdown)
 - Alert before event (minutes, default 5; 0 disables alerts)
 
 ## Uninstall

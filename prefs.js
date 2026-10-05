@@ -72,15 +72,15 @@ export default class NextEventPreferences extends ExtensionPreferences {
         group.add(refreshRow);
 
         const nowIndicatorRow = new Adw.SwitchRow({
-            title: _('Show "Now" indicator'),
-            subtitle: _('Use "Now" for events currently in progress'),
+            title: _('Highlight ongoing events'),
+            subtitle: _('Use a solid white dot in the top bar and "Now" in the dropdown'),
         });
         settings.bind('show-ongoing-indicator', nowIndicatorRow, 'active', Gio.SettingsBindFlags.DEFAULT);
         group.add(nowIndicatorRow);
 
         const alertRow = new Adw.SpinRow({
             title: _('Alert before event (minutes)'),
-            subtitle: _('Pulse a dot before the displayed event starts; 0 disables alerts'),
+            subtitle: _('Pulse a dot before the next meeting starts; 0 disables alerts'),
             adjustment: new Gtk.Adjustment({
                 lower: 0,
                 upper: 60,
