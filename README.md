@@ -51,4 +51,12 @@ Creates: `dist/next-event@bhavik.dev.shell-extension.zip`
 
 ## Maintainer docs
 
+For development on GNOME 49 and later, install `mutter-dev-bin` (Ubuntu), then run:
+
+```bash
+./dev.sh
+```
+
+This compiles settings, links the extension to this checkout (backing up any previous installation), and enables it in a nested GNOME preview. Close the preview and rerun the command after changing JavaScript. Your main desktop session keeps running. Preference changes apply immediately, and preview logs appear in the terminal.
+
 Publishing + review checklist: `docs/README.md`
